@@ -1,157 +1,207 @@
-# Black Markets Lab
+# meteo_pipeline
 
-A financial trading simulation game built on **Geometric Brownian Motion (GBM)** — the stochastic process underlying the Black-Scholes framework. Observe simulated market dynamics, trade assets under time pressure, and compete against a friend.
+A fully automated weather data ingestion and processing pipeline built as a proof-of-concept for the **ARVC Wearable Data Pipeline** project at ETH Zurich's Exercise Physiology Lab.
 
----
-
-## Overview
-
-Black Markets Lab presents financial market simulation as an interactive game. Stock prices evolve according to the same mathematical model assumed by Black-Scholes option pricing, producing realistic price paths with configurable volatility and drift. Players either trade against the clock in single-player mode or challenge each other through a shared market session in multiplayer.
+This project mirrors the architecture of the real study pipeline — dual database (PostgreSQL + InfluxDB), incremental fetching, data validation, crash-safe sync state, logging, and scheduled execution — using the Open-Meteo API as a lightweight data source in place of the Polar AccessLink API.
 
 ---
 
-## Features
+## Architecture
 
-### Play (Single-Player)
-Start with a fixed capital, observe live GBM price paths advancing in real time, and execute buy/sell orders to maximise portfolio value before the timer expires. A configurable **reflection period** at the start allows players to study initial prices and volatility values before trading opens.
-
-### Simulation Mode
-Configure a custom simulation: choose an asset, set the volatility (σ), and define the initial price. Watch the GBM trajectory unfold step by step with a live animated chart. The simulation can be paused, resumed, and restarted with new parameters.
-
-### Multiplayer (Prototype)
-Create a room and share the code with an opponent. The host configures all game parameters (difficulty, number of assets, duration, starting capital, reflection time). Once both players are in the room, the host starts the session. Both players trade independently on the same simulated market. Each player can see the opponent's **total capital** in real time, but not their portfolio composition. The player with the highest final capital (cash + market value of holdings) wins.
-
-> Room synchronization uses browser `localStorage`. Both players must share the same browser session. This architecture is designed to be replaced with WebSocket connections for cross-device play in a future version.
-
-### Information Events
-Structured market events (earnings reports, sector news, disappointing results) apply a multiplicative shock to a stock's future price trajectory from the current simulation index, modelling sudden price jumps or drops.
+```
+Open-Meteo API
+      ↓
+api/fetch.py          — HTTP request, response parsing
+      ↓
+pipeline/validator.py — Data validation (bounds checking, null detection)
+      ↓
+db/influx.py          — Write time-series measurements to InfluxDB
+      ↓
+db/postgres.py        — Update sync_state (anti-duplication mechanism)
+      ↓
+pipeline/aggregator.py — Generate daily summaries
+```
 
 ---
 
-## Mathematical Model
+## Tech Stack
 
-Stock prices are simulated using **Geometric Brownian Motion**, the exact solution of the GBM stochastic differential equation:
-
-$$S_{t+\Delta t} = S_t \cdot \exp\!\left(\left(\mu - \frac{\sigma^2}{2}\right)\Delta t + \sigma\sqrt{\Delta t}\;Z_t\right)$$
-
-| Symbol | Description |
+| Component | Technology |
 |---|---|
-| $S_t$ | Asset price at time $t$ |
-| $\mu$ | Drift — risk-free rate (set to 2% p.a.) |
-| $\sigma$ | Volatility — standard deviation of log-returns |
-| $\Delta t$ | Time increment ($T / N$, where $T = 2$ years, $N$ = number of steps) |
-| $Z_t$ | Independent standard normal random variable |
-
-This formulation is consistent with the **log-normal price distribution** assumed by the Black-Scholes model. Each asset's volatility is either user-defined (simulation mode) or drawn from a clipped normal distribution $\sigma \sim \mathcal{N}(0.50,\, 0.10)$, bounded to $[0.20,\, 0.60]$ (game mode).
-
-The Itô correction term $-\frac{\sigma^2}{2}$ ensures the expected price growth equals the risk-free drift, preventing volatility from introducing a systematic upward bias.
-
-**Event impact** is modelled as a one-time multiplicative shock applied to all future values from the current time index:
-- Positive event: $\times\,1.15$ (earnings beat)
-- Negative event: $\times\,0.85$ (disappointing report)
-- Volatile event: random noise factor drawn from $[\,1 - \delta,\; 1 + \delta\,]$
-
----
-
-## Installation
-
-### Prerequisites
-
-- Python 3.10 or higher
-- Node.js 18 or higher
-
-### Backend dependencies
-
-```bash
-cd BackEnd
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install dash plotly numpy flask flask-cors
-```
-
-### Frontend dependencies
-
-```bash
-cd FrontEnd
-npm install
-```
-
----
-
-## Running the Application
-
-**Step 1 — start the backend** (from the project root, with the virtual environment activated):
-
-```bash
-source venv/bin/activate
-python BackEnd/dash_app.py
-```
-
-The Flask server starts at `http://localhost:8050`.
-
-**Step 2 — start the frontend** (in a separate terminal):
-
-```bash
-cd FrontEnd
-npm run dev
-```
-
-Open `http://localhost:5173` in your browser.
-
----
-
-## How to Play
-
-### Single-Player
-
-1. Click **Play** in the sidebar.
-2. Select a difficulty level and the number of stocks.
-3. Wait out the **Market Preview** phase use it to study initial prices and volatility values.
-4. Once trading opens, select an asset from the tab bar, set a quantity, and click **Buy** or **Sell**.
-5. Monitor your cash balance and net worth in the header.
-6. When the timer reaches zero, your final net worth (cash + market value of all holdings) is your score.
-
-### Simulation Mode
-
-1. Click **Simulation** in the sidebar.
-2. Choose an asset, set the volatility σ, and enter an initial price.
-3. Click **Start Simulation** to animate the GBM path in real time.
-4. Use **Stop** to pause and **Configure New Simulation** to reset.
-
-### Multiplayer
-
-1. Click **Multiplayer** in the sidebar.
-2. **Host:** enter a display name → click *Create Room* → configure game settings → share the room code with your opponent → click *Start Game* once they have joined.
-3. **Guest:** enter a display name → click *Join Room* → enter the room code → wait for the host to start.
-4. Both players trade independently on the same simulated market. The opponent's total capital is visible in the game header; their individual holdings are not.
-5. The player with the highest final capital at the end of the session wins.
-
----
-
-## Screenshots
-
-> Add screenshots to the `screenshots/` folder before final submission.
-
-| View | Path |
-|---|---|
-| Home | `screenshots/home.png` |
-| Play — in-game | `screenshots/play.png` |
-| Simulation | `screenshots/simulation.png` |
-| Multiplayer Lobby | `screenshots/multiplayer.png` |
+| Language | Python 3.13+ |
+| Metadata database | PostgreSQL 17 |
+| Time-series database | InfluxDB 2 |
+| Data source | Open-Meteo API (no auth required) |
+| Retry logic | tenacity |
+| Scheduling | cron |
 
 ---
 
 ## Project Structure
 
 ```
-├── BackEnd/
-│   ├── dash_app.py          # Flask/Dash server · REST API · event database
-│   └── calculs.py           # GBM simulation engine
-├── FrontEnd/
-│   └── src/
-│       ├── components/      # Navbar, Sidebar, ProgressiveStockGraph, …
-│       ├── context/         # SimulationContext — shared game state
-│       ├── pages/           # Home, Game, Simulation, Multiplayer
-│       └── services/        # API client · multiplayer room service
+meteo_pipeline/
+├── api/
+│   └── fetch.py              # Open-Meteo API client
+├── db/
+│   ├── postgres.py           # PostgreSQL client (metadata, sync state)
+│   └── influx.py             # InfluxDB client (time-series write/query)
+├── pipeline/
+│   ├── orchestrator.py       # Core pipeline logic per user
+│   ├── validator.py          # Data validation layer
+│   └── aggregator.py        # Daily summary generation
+├── utils/
+│   ├── config.py             # Environment variable loader
+│   └── logger.py             # Logging configuration
+├── logs/                     # Auto-generated log files
+├── run_pipeline.py           # Entry point
+├── .env                      # Credentials (not committed)
 └── README.md
 ```
+
+---
+
+## Setup
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/your-username/meteo_pipeline.git
+cd meteo_pipeline
+```
+
+### 2. Create a virtual environment
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 3. Configure environment variables
+
+Create a `.env` file at the root of the project:
+
+```env
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DB=meteo_pipeline
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+
+INFLUX_URL=http://localhost:8086
+INFLUX_TOKEN=your_influxdb_token_here
+INFLUX_ORG=meteo_org
+INFLUX_BUCKET=meteo_data
+```
+
+### 4. Set up PostgreSQL
+
+```bash
+psql postgres
+```
+
+```sql
+CREATE DATABASE meteo_pipeline;
+\c meteo_pipeline
+
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    location VARCHAR(100) NOT NULL,
+    latitude FLOAT NOT NULL,
+    longitude FLOAT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE sync_state (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id),
+    last_fetched_at TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+INSERT INTO users (name, location, latitude, longitude)
+VALUES ('Kamil', 'ETH Zurich HG', 47.3763, 8.5480);
+
+INSERT INTO sync_state (user_id, last_fetched_at)
+VALUES (1, NOW() - INTERVAL '1 day');
+```
+
+### 5. Set up InfluxDB
+
+Start InfluxDB and navigate to `http://localhost:8086`. Complete the initial setup with:
+- Organization: `meteo_org`
+- Bucket: `meteo_data`
+
+Copy the generated token into your `.env` file.
+
+---
+
+## Usage
+
+### Run the ingestion pipeline
+
+```bash
+python run_pipeline.py --mode pipeline
+```
+
+### Generate a daily summary
+
+```bash
+# Today
+python run_pipeline.py --mode aggregate
+
+# Specific date
+python run_pipeline.py --mode aggregate --date 2026-06-07
+```
+
+---
+
+## Scheduling (cron)
+
+To run the pipeline automatically every hour and generate a daily summary at 8am:
+
+```bash
+crontab -e
+```
+
+```
+0 * * * *   /path/to/venv/bin/python /path/to/meteo_pipeline/run_pipeline.py --mode pipeline
+0 8 * * *   /path/to/venv/bin/python /path/to/meteo_pipeline/run_pipeline.py --mode aggregate
+```
+
+---
+
+## Key Design Decisions
+
+**Why two databases?**
+PostgreSQL handles structured metadata that rarely changes (user profiles, sync state). InfluxDB handles continuous timestamped measurements — it is purpose-built for time-range queries at scale, which would be slow in a relational database.
+
+**Crash-safe sync state**
+The `sync_state` table in PostgreSQL is only updated *after* a confirmed successful write to InfluxDB. If the pipeline crashes mid-run, the next execution will re-fetch and re-process the same records — guaranteeing zero data loss.
+
+**Incremental fetching**
+Each run reads `last_fetched_at` from PostgreSQL and only processes records newer than that timestamp. This is the equivalent of the transaction model in the Polar AccessLink API used in the real ARVC project.
+
+**Retry with exponential backoff**
+Every API call is wrapped with the `tenacity` library — 3 attempts with 1s → 2s → 4s wait. One transient failure never causes a full pipeline failure.
+
+---
+
+## Mapping to the ARVC Project
+
+| This project | ARVC wearable pipeline |
+|---|---|
+| Open-Meteo API | Polar AccessLink API |
+| 1 user | 25 ARVC patients |
+| Temperature, wind, humidity | Heart rate, steps, exercise sessions |
+| sync_state (timestamp-based) | Transaction model + sync_state |
+| Sequential loop | asyncio.gather() for 25 patients |
+| Local server | ETH Zurich server + systemd |
+
+---
+
+## Author
+
+Kamil Sentissi
