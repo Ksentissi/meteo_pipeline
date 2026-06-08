@@ -1,4 +1,4 @@
-# Environment variables — never commit credentials
+# Environment variables 
 .env
 
 # Python virtual environment
