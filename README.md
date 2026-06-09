@@ -2,7 +2,7 @@
 
 A fully automated weather data ingestion and processing pipeline. Built ad Poc for the ARVC project.
 
-This project mirrors the architecture of the real study pipeline — dual database (PostgreSQL + InfluxDB), incremental fetching, data validation, crash-safe sync state, logging, and scheduled execution — using the Open-Meteo API as a lightweight data source in place of the Polar AccessLink API.
+This project mirrors the architecture of the real study pipeline dual database (PostgreSQL + InfluxDB), incremental fetching, data validation, crash-safe sync state, logging, and scheduled execution using the Open-Meteo API as a lightweight data source in place of the Polar AccessLink API.
 
 ---
 
